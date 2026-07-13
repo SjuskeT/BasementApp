@@ -114,14 +114,23 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
 
 @Composable
 fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
+    val boxes by viewModel.boxes.collectAsState()
+    val currentBox = boxes.find { it.id == box.id } ?: box // stays in sync after rename
     val items by viewModel.itemsForBox(box.id).collectAsState()
+
     var showAddDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var itemToEdit by remember { mutableStateOf<Item?>(null) }
+    var itemToMove by remember { mutableStateOf<Item?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(box.name) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("< Back") } }
+                title = { Text(currentBox.name) },
+                navigationIcon = { TextButton(onClick = onBack) { Text("< Back") } },
+                actions = {
+                    TextButton(onClick = { showRenameDialog = true }) { Text("Edit") }
+                }
             )
         },
         floatingActionButton = {
@@ -129,15 +138,19 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            Text(box.location, style = MaterialTheme.typography.bodyMedium)
+            Text(currentBox.location, style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(8.dp))
             LazyColumn {
                 items(items) { item ->
                     ListItem(
                         headlineContent = { Text(item.name) },
                         supportingContent = { Text("Qty: ${item.quantity}") },
+                        modifier = Modifier.clickable { itemToEdit = item },
                         trailingContent = {
-                            TextButton(onClick = { viewModel.deleteItem(item) }) { Text("Delete") }
+                            Row {
+                                TextButton(onClick = { itemToMove = item }) { Text("Move") }
+                                TextButton(onClick = { viewModel.deleteItem(item) }) { Text("Delete") }
+                            }
                         }
                     )
                 }
@@ -149,8 +162,42 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
         AddItemDialog(
             onDismiss = { showAddDialog = false },
             onConfirm = { name, qty ->
-                viewModel.addItem(name, qty, box.id)
+                viewModel.addItem(name, qty, currentBox.id)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (showRenameDialog) {
+        RenameBoxDialog(
+            box = currentBox,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { name, location ->
+                viewModel.updateBox(currentBox.copy(name = name, location = location))
+                showRenameDialog = false
+            }
+        )
+    }
+
+    itemToEdit?.let { item ->
+        EditItemDialog(
+            item = item,
+            onDismiss = { itemToEdit = null },
+            onConfirm = { name, qty ->
+                viewModel.updateItem(item.copy(name = name, quantity = qty))
+                itemToEdit = null
+            }
+        )
+    }
+
+    itemToMove?.let { item ->
+        MoveItemDialog(
+            item = item,
+            boxes = boxes.filter { it.id != currentBox.id },
+            onDismiss = { itemToMove = null },
+            onMove = { newBoxId ->
+                viewModel.moveItem(item, newBoxId)
+                itemToMove = null
             }
         )
     }
@@ -202,6 +249,81 @@ fun AddItemDialog(onDismiss: () -> Unit, onConfirm: (String, Int) -> Unit) {
                 if (name.isNotBlank()) onConfirm(name, quantity.toIntOrNull() ?: 1)
             }) { Text("Add") }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun RenameBoxDialog(box: Box, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+    var name by remember { mutableStateOf(box.name) }
+    var location by remember { mutableStateOf(box.location) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Box") },
+        text = {
+            Column {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Box name") })
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Location") })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name, location) }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun EditItemDialog(item: Item, onDismiss: () -> Unit, onConfirm: (String, Int) -> Unit) {
+    var name by remember { mutableStateOf(item.name) }
+    var quantity by remember { mutableStateOf(item.quantity.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Item") },
+        text = {
+            Column {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Item name") })
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it.filter { c -> c.isDigit() } },
+                    label = { Text("Quantity") }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (name.isNotBlank()) onConfirm(name, quantity.toIntOrNull() ?: 1)
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun MoveItemDialog(item: Item, boxes: List<Box>, onDismiss: () -> Unit, onMove: (Int) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Move \"${item.name}\" to…") },
+        text = {
+            if (boxes.isEmpty()) {
+                Text("No other boxes available.")
+            } else {
+                LazyColumn {
+                    items(boxes) { targetBox ->
+                        ListItem(
+                            headlineContent = { Text(targetBox.name) },
+                            supportingContent = { Text(targetBox.location) },
+                            modifier = Modifier.clickable { onMove(targetBox.id) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

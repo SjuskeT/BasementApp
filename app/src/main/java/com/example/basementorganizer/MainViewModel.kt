@@ -44,4 +44,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteItem(item: Item) {
         viewModelScope.launch { itemDao.deleteItem(item) }
     }
+
+    fun updateBox(box: Box) {
+        viewModelScope.launch { boxDao.updateBox(box) }
+    }
+
+    fun updateItem(item: Item) {
+        viewModelScope.launch { itemDao.updateItem(item) }
+    }
+
+    fun moveItem(item: Item, newBoxId: Int) {
+        viewModelScope.launch { itemDao.updateItem(item.copy(boxId = newBoxId)) }
+    }
 }

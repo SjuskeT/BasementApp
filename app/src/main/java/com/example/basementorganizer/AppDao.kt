@@ -13,6 +13,9 @@ interface BoxDao {
 
     @Delete
     suspend fun deleteBox(box: Box)
+
+    @Update
+    suspend fun updateBox(box: Box)
 }
 
 @Dao
@@ -31,4 +34,7 @@ interface ItemDao {
 
     @Delete
     suspend fun deleteItem(item: Item)
+
+    @Update
+    suspend fun updateItem(item: Item)
 }
