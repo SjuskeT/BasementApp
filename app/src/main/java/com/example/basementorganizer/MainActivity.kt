@@ -80,10 +80,13 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
                 Text("Results:", style = MaterialTheme.typography.titleMedium)
                 LazyColumn {
                     items(searchResults) { item ->
-                        val boxName = boxes.find { it.id == item.boxId }?.name ?: "Unknown box"
+                        val itemBox = boxes.find { it.id == item.boxId }
                         ListItem(
                             headlineContent = { Text("${item.name} (x${item.quantity})") },
-                            supportingContent = { Text("In: $boxName") }
+                            supportingContent = { Text("In: ${itemBox?.name ?: "Unknown box"}") },
+                            modifier = Modifier.clickable(enabled = itemBox != null) {
+                                itemBox?.let { onBoxClick(it) }
+                            }
                         )
                     }
                 }
