@@ -6,17 +6,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -24,8 +31,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            val colorScheme = lightColorScheme(
+                primary = Accent,
+                onPrimary = AccentText,
+                background = PageBackground,
+                surface = PageBackground,
+                onBackground = TextPrimary,
+                onSurface = TextPrimary,
+                error = DangerText
+            )
+            MaterialTheme(colorScheme = colorScheme, typography = AppTypography) {
+                Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
                     AppRoot(viewModel)
                 }
             }
@@ -33,7 +49,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Simple screen state: either the box list, or a specific box's detail view
 sealed class Screen {
     object BoxList : Screen()
     data class BoxDetail(val box: Box) : Screen()
@@ -64,9 +79,21 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Basement Boxes") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Basement Inventory".uppercase()) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = AppBarBackground,
+                    titleContentColor = AppBarText
+                )
+            )
+        },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) { Text("+") }
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = Accent,
+                contentColor = AccentText
+            ) { Text("+", style = MaterialTheme.typography.titleLarge) }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
@@ -83,30 +110,24 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (searchQuery.isNotBlank()) {
-                Text("Results:", style = MaterialTheme.typography.titleMedium)
-                LazyColumn {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(searchResults) { item ->
                         val itemBox = boxes.find { it.id == item.boxId }
-                        ListItem(
-                            headlineContent = { Text("${item.name} (x${item.quantity})") },
-                            supportingContent = { Text("In: ${itemBox?.name ?: "Unknown box"}") },
-                            modifier = Modifier.clickable(enabled = itemBox != null) {
-                                itemBox?.let { onBoxClick(it) }
-                            }
+                        ItemRow(
+                            item = item,
+                            subtitle = "In: ${itemBox?.name ?: "Unknown box"}",
+                            onClick = { itemBox?.let { onBoxClick(it) } },
+                            trailing = null
                         )
                     }
                 }
             } else {
-                LazyColumn {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(boxes) { box ->
-                        ListItem(
-                            headlineContent = { Text(box.name) },
-                            supportingContent = { Text(box.location) },
-                            modifier = Modifier.clickable { onBoxClick(box) } // requires foundation import
-                        )
+                        BoxTagCard(box = box, onClick = { onBoxClick(box) })
                     }
                 }
             }
@@ -125,9 +146,42 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
 }
 
 @Composable
+fun BoxTagCard(box: Box, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(TagBackground)
+            .border(1.5.dp, TagBorder, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(PageBackground)
+                    .border(1.5.dp, TagBorder, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(box.name.uppercase(), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    box.location,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                    color = TextSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
     val boxes by viewModel.boxes.collectAsState()
-    val currentBox = boxes.find { it.id == box.id } ?: box // stays in sync after rename
+    val currentBox = boxes.find { it.id == box.id } ?: box
     val items by viewModel.itemsForBox(box.id).collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -138,30 +192,45 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(currentBox.name) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("< Back") } },
+                title = { Text(currentBox.name.uppercase()) },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("< Back", color = AppBarText) }
+                },
                 actions = {
-                    TextButton(onClick = { showRenameDialog = true }) { Text("Edit") }
-                }
+                    TextButton(onClick = { showRenameDialog = true }) { Text("Edit", color = AppBarText) }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = AppBarBackground,
+                    titleContentColor = AppBarText
+                )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) { Text("+") }
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = Accent,
+                contentColor = AccentText
+            ) { Text("+", style = MaterialTheme.typography.titleLarge) }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            Text(currentBox.location, style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn {
+            Text(
+                currentBox.location,
+                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(items) { item ->
-                    ListItem(
-                        headlineContent = { Text(item.name) },
-                        supportingContent = { Text("Qty: ${item.quantity}") },
-                        modifier = Modifier.clickable { itemToEdit = item },
-                        trailingContent = {
+                    ItemRow(
+                        item = item,
+                        subtitle = "Qty: ${item.quantity}",
+                        onClick = { itemToEdit = item },
+                        trailing = {
                             Row {
-                                TextButton(onClick = { itemToMove = item }) { Text("Move") }
-                                TextButton(onClick = { viewModel.deleteItem(item) }) { Text("Delete") }
+                                TagButton("Move", NeutralBorder, TextSecondary) { itemToMove = item }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                TagButton("Delete", DangerBorder, DangerText) { viewModel.deleteItem(item) }
                             }
                         }
                     )
@@ -213,6 +282,42 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
             }
         )
     }
+}
+
+@Composable
+fun ItemRow(item: Item, subtitle: String, onClick: () -> Unit, trailing: (@Composable () -> Unit)?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White)
+            .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${item.name} (x${item.quantity})", style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        }
+        trailing?.invoke()
+    }
+}
+
+@Composable
+fun TagButton(text: String, borderColor: Color, textColor: Color, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = textColor,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(5.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
 }
 
 @Composable
@@ -324,12 +429,14 @@ fun MoveItemDialog(item: Item, boxes: List<Box>, onDismiss: () -> Unit, onMove: 
             if (boxes.isEmpty()) {
                 Text("No other boxes available.")
             } else {
-                LazyColumn {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(boxes) { targetBox ->
-                        ListItem(
-                            headlineContent = { Text(targetBox.name) },
-                            supportingContent = { Text(targetBox.location) },
-                            modifier = Modifier.clickable { onMove(targetBox.id) }
+                        Text(
+                            "${targetBox.name} — ${targetBox.location}",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onMove(targetBox.id) }
+                                .padding(vertical = 10.dp)
                         )
                     }
                 }
