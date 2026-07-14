@@ -3,6 +3,8 @@ package com.example.basementorganizer
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+data class BoxItemCount(val boxId: Int, val count: Int)
+
 @Dao
 interface BoxDao {
     @Query("SELECT * FROM boxes ORDER BY name")
@@ -37,4 +39,7 @@ interface ItemDao {
 
     @Update
     suspend fun updateItem(item: Item)
+
+    @Query("SELECT boxId, COUNT(*) as count FROM items GROUP BY boxId")
+    fun getItemCounts(): Flow<List<BoxItemCount>>
 }

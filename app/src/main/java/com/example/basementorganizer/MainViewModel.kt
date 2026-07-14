@@ -23,6 +23,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val itemCounts: StateFlow<Map<Int, Int>> = itemDao.getItemCounts()
+        .map { list -> list.associate { it.boxId to it.count } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
 
     fun itemsForBox(boxId: Int): StateFlow<List<Item>> =

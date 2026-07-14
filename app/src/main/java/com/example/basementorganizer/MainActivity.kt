@@ -6,24 +6,33 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.shadow
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -41,7 +50,10 @@ class MainActivity : ComponentActivity() {
                 error = DangerText
             )
             MaterialTheme(colorScheme = colorScheme, typography = AppTypography) {
-                Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
+                Surface(
+                    modifier = Modifier.fillMaxSize().pegboardTexture(),
+                    color = PageBackground
+                ) {
                     AppRoot(viewModel)
                 }
             }
@@ -72,29 +84,50 @@ fun AppRoot(viewModel: MainViewModel) {
 }
 
 @Composable
+fun TactileFab(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, label = "fabScale")
+
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = Accent,
+        contentColor = AccentText,
+        interactionSource = interactionSource,
+        modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
+    ) { Icon(Icons.Default.Add, contentDescription = "Add") }
+}
+
+@Composable
 fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
     val boxes by viewModel.boxes.collectAsState()
+    val itemCounts by viewModel.itemCounts.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
+    val totalItems = itemCounts.values.sum()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Basement Inventory".uppercase()) },
+                title = {
+                    Column {
+                        Text("Basement Inventory".uppercase())
+                        Text(
+                            "${boxes.size} boxes · $totalItems items",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppBarText.copy(alpha = 0.7f)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = AppBarBackground,
                     titleContentColor = AppBarText
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = Accent,
-                contentColor = AccentText
-            ) { Text("+", style = MaterialTheme.typography.titleLarge) }
-        }
+        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             OutlinedTextField(
@@ -125,9 +158,13 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
                     }
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(boxes) { box ->
-                        BoxTagCard(box = box, onClick = { onBoxClick(box) })
+                        BoxTagCard(
+                            box = box,
+                            itemCount = itemCounts[box.id] ?: 0,
+                            onClick = { onBoxClick(box) }
+                        )
                     }
                 }
             }
@@ -146,26 +183,25 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
 }
 
 @Composable
-fun BoxTagCard(box: Box, onClick: () -> Unit) {
+fun BoxTagCard(box: Box, itemCount: Int, onClick: () -> Unit) {
+    val shape = remember { PunchedTagShape() }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .shadow(elevation = 3.dp, shape = shape, clip = false)
+            .clip(shape)
             .background(TagBackground)
-            .border(1.5.dp, TagBorder, RoundedCornerShape(6.dp))
+            .dashedBorder(TagBorder)
             .clickable { onClick() }
-            .padding(14.dp)
+            .padding(start = 34.dp, top = 14.dp, end = 12.dp, bottom = 14.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(PageBackground)
-                    .border(1.5.dp, TagBorder, CircleShape)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(box.name.uppercase(), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
@@ -173,6 +209,17 @@ fun BoxTagCard(box: Box, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
                     color = TextSecondary
                 )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(PageBackground)
+                    .border(1.dp, TagBorder, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(itemCount.toString(), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Text("ITEMS", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
         }
     }
@@ -194,10 +241,14 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(currentBox.name.uppercase()) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("< Back", color = AppBarText) }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = AppBarText)
+                    }
                 },
                 actions = {
-                    TextButton(onClick = { showRenameDialog = true }) { Text("Edit", color = AppBarText) }
+                    IconButton(onClick = { showRenameDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit box", tint = AppBarText)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = AppBarBackground,
@@ -205,13 +256,7 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = Accent,
-                contentColor = AccentText
-            ) { Text("+", style = MaterialTheme.typography.titleLarge) }
-        }
+        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             Text(
@@ -228,9 +273,12 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
                         onClick = { itemToEdit = item },
                         trailing = {
                             Row {
-                                TagButton("Move", NeutralBorder, TextSecondary) { itemToMove = item }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                TagButton("Delete", DangerBorder, DangerText) { viewModel.deleteItem(item) }
+                                IconButton(onClick = { itemToMove = item }, modifier = Modifier.size(36.dp)) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move item", tint = TextSecondary)
+                                }
+                                IconButton(onClick = { viewModel.deleteItem(item) }, modifier = Modifier.size(36.dp)) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete item", tint = DangerText)
+                                }
                             }
                         }
                     )
@@ -304,20 +352,6 @@ fun ItemRow(item: Item, subtitle: String, onClick: () -> Unit, trailing: (@Compo
         }
         trailing?.invoke()
     }
-}
-
-@Composable
-fun TagButton(text: String, borderColor: Color, textColor: Color, onClick: () -> Unit) {
-    Text(
-        text = text,
-        color = textColor,
-        style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(5.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    )
 }
 
 @Composable
