@@ -7,7 +7,7 @@ data class BoxItemCount(val boxId: Int, val count: Int)
 
 @Dao
 interface BoxDao {
-    @Query("SELECT * FROM boxes ORDER BY name")
+    @Query("SELECT * FROM boxes ORDER BY name COLLATE NOCASE")
     fun getAllBoxes(): Flow<List<Box>>
 
     @Insert
@@ -18,11 +18,20 @@ interface BoxDao {
 
     @Update
     suspend fun updateBox(box: Box)
+
+    @Query("SELECT * FROM boxes")
+    suspend fun getAllBoxesOnce(): List<Box>
+
+    @Insert
+    suspend fun insertBoxes(boxes: List<Box>)
+
+    @Query("DELETE FROM boxes")
+    suspend fun clearBoxes()
 }
 
 @Dao
 interface ItemDao {
-    @Query("SELECT * FROM items WHERE boxId = :boxId ORDER BY name")
+    @Query("SELECT * FROM items WHERE boxId = :boxId ORDER BY name COLLATE NOCASE")
     fun getItemsForBox(boxId: Int): Flow<List<Item>>
 
     @Query("""
@@ -42,4 +51,13 @@ interface ItemDao {
 
     @Query("SELECT boxId, COUNT(*) as count FROM items GROUP BY boxId")
     fun getItemCounts(): Flow<List<BoxItemCount>>
+
+    @Query("SELECT * FROM items")
+    suspend fun getAllItemsOnce(): List<Item>
+
+    @Insert
+    suspend fun insertItems(items: List<Item>)
+
+    @Query("DELETE FROM items")
+    suspend fun clearItems()
 }

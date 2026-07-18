@@ -5,6 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import android.net.Uri
+import com.google.gson.Gson
+
+data class ExportPayload(val boxes: List<Box>, val items: List<Item>)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
@@ -59,5 +63,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun moveItem(item: Item, newBoxId: Int) {
         viewModelScope.launch { itemDao.updateItem(item.copy(boxId = newBoxId)) }
+    }
+
+    private val gson = Gson()
+
+    private val _statusMessage = MutableStateFlow<String?>(null)
+    val statusMessage: StateFlow<String?> = _statusMessage
+
+    fun clearStatusMessage() {
+        _statusMessage.value = null
+    }
+
+    fun exportData(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val payload = ExportPayload(boxDao.getAllBoxesOnce(), itemDao.getAllItemsOnce())
+                val json = gson.toJson(payload)
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(json.toByteArray())
+                }
+                _statusMessage.value = "Export complete"
+            } catch (e: Exception) {
+                _statusMessage.value = "Export failed: ${e.message}"
+            }
+        }
+    }
+
+    fun importData(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val json = getApplication<Application>().contentResolver.openInputStream(uri)?.use { input ->
+                    input.bufferedReader().readText()
+                } ?: throw Exception("Could not read file")
+                val payload = gson.fromJson(json, ExportPayload::class.java)
+                itemDao.clearItems()
+                boxDao.clearBoxes()
+                boxDao.insertBoxes(payload.boxes)
+                itemDao.insertItems(payload.items)
+                _statusMessage.value = "Import complete"
+            } catch (e: Exception) {
+                _statusMessage.value = "Import failed: ${e.message}"
+            }
+        }
     }
 }

@@ -40,6 +40,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.MoreVert
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -251,8 +257,8 @@ fun SearchResultRow(item: Item, boxName: String, onClick: () -> Unit) {
         ) { BoxIcon() }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("${item.name} (x${item.quantity})", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Text("In: $boxName", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = TextSecondary)
+            Text(item.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("In: $boxName · Qty: ${item.quantity}", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = TextSecondary)
         }
     }
 }
@@ -274,7 +280,7 @@ fun DetailItemRow(item: Item, onClick: () -> Unit, onMove: () -> Unit, onDelete:
         ) { BoxIcon() }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("${item.name} (x${item.quantity})", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(item.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Text("Qty: ${item.quantity}", fontSize = 12.sp, color = TextSecondary)
         }
         Box(
@@ -308,6 +314,24 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var showImportConfirm by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? -> uri?.let { viewModel.exportData(it) } }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let { viewModel.importData(it) } }
+
+    val statusMessage by viewModel.statusMessage.collectAsState()
+    LaunchedEffect(statusMessage) {
+        statusMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearStatusMessage()
+        }
+    }
     val totalItems = itemCounts.values.sum()
 
     Scaffold(
@@ -315,7 +339,30 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
         containerColor = PageBackground
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            ListHeader(boxCount = boxes.size, itemCount = totalItems)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                ListHeader(boxCount = boxes.size, itemCount = totalItems)
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 12.dp)) {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = TextPrimary)
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Export") },
+                            onClick = {
+                                showMenu = false
+                                exportLauncher.launch("basement_inventory_backup.json")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Import") },
+                            onClick = {
+                                showMenu = false
+                                showImportConfirm = true
+                            }
+                        )
+                    }
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -377,6 +424,20 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
                 viewModel.addBox(name, location)
                 showAddDialog = false
             }
+        )
+    }
+    if (showImportConfirm) {
+        AlertDialog(
+            onDismissRequest = { showImportConfirm = false },
+            title = { Text("Import backup?") },
+            text = { Text("This replaces all boxes and items currently in the app with the contents of the backup file. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showImportConfirm = false
+                    importLauncher.launch(arrayOf("*/*"))
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { showImportConfirm = false }) { Text("Cancel") } }
         )
     }
 }
@@ -452,6 +513,11 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
             onConfirm = { name, location ->
                 viewModel.updateBox(currentBox.copy(name = name, location = location))
                 showRenameDialog = false
+            },
+            onDelete = {
+                viewModel.deleteBox(currentBox)
+                showRenameDialog = false
+                onBack()
             }
         )
     }
@@ -531,9 +597,10 @@ fun AddItemDialog(onDismiss: () -> Unit, onConfirm: (String, Int) -> Unit) {
 }
 
 @Composable
-fun RenameBoxDialog(box: Box, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+fun RenameBoxDialog(box: Box, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit, onDelete: () -> Unit) {
     var name by remember { mutableStateOf(box.name) }
     var location by remember { mutableStateOf(box.location) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -543,6 +610,14 @@ fun RenameBoxDialog(box: Box, onDismiss: () -> Unit, onConfirm: (String, String)
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Box name") })
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Location") })
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Delete box",
+                    color = DangerIcon,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable { showDeleteConfirm = true }
+                )
             }
         },
         confirmButton = {
@@ -550,6 +625,21 @@ fun RenameBoxDialog(box: Box, onDismiss: () -> Unit, onConfirm: (String, String)
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete \"${box.name}\"?") },
+            text = { Text("This also deletes every item stored in this box. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("Delete", color = DangerIcon) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
 }
 
 @Composable
