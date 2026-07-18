@@ -7,14 +7,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,16 +24,22 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -47,13 +54,10 @@ class MainActivity : ComponentActivity() {
                 surface = PageBackground,
                 onBackground = TextPrimary,
                 onSurface = TextPrimary,
-                error = DangerText
+                error = DangerIcon
             )
-            MaterialTheme(colorScheme = colorScheme, typography = AppTypography) {
-                Surface(
-                    modifier = Modifier.fillMaxSize().pegboardTexture(),
-                    color = PageBackground
-                ) {
+            MaterialTheme(colorScheme = colorScheme) {
+                Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
                     AppRoot(viewModel)
                 }
             }
@@ -98,6 +102,205 @@ fun TactileFab(onClick: () -> Unit) {
     ) { Icon(Icons.Default.Add, contentDescription = "Add") }
 }
 
+// A simple line-art box icon, drawn rather than relying on an icon library
+@Composable
+fun BoxIcon(modifier: Modifier = Modifier, tint: Color = IconTint) {
+    Canvas(modifier = modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val strokeWidth = 1.6.dp.toPx()
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(w * 0.08f, h * 0.22f),
+            size = Size(w * 0.84f, h * 0.62f),
+            cornerRadius = CornerRadius(w * 0.06f),
+            style = Stroke(width = strokeWidth)
+        )
+        drawLine(
+            color = tint,
+            start = Offset(w * 0.08f, h * 0.4f),
+            end = Offset(w * 0.92f, h * 0.4f),
+            strokeWidth = strokeWidth
+        )
+        drawLine(
+            color = tint,
+            start = Offset(w * 0.42f, h * 0.22f),
+            end = Offset(w * 0.42f, h * 0.4f),
+            strokeWidth = strokeWidth
+        )
+        drawLine(
+            color = tint,
+            start = Offset(w * 0.58f, h * 0.22f),
+            end = Offset(w * 0.58f, h * 0.4f),
+            strokeWidth = strokeWidth
+        )
+    }
+}
+
+// A small illustrated stack of boxes for the header, standing in for a photo
+@Composable
+fun StackedBoxesIllustration(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy((-10).dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 40.dp, height = 46.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(BoxToneLight)
+        )
+        Box(
+            modifier = Modifier
+                .size(width = 52.dp, height = 60.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(BoxToneMid)
+        )
+        Box(
+            modifier = Modifier
+                .size(width = 36.dp, height = 40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(BoxToneDark)
+        )
+    }
+}
+
+@Composable
+fun ListHeader(boxCount: Int, itemCount: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        Column {
+            Text(
+                "BASEMENT\nINVENTORY",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 30.sp,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "$boxCount boxes · $itemCount items",
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
+        }
+        StackedBoxesIllustration()
+    }
+}
+
+@Composable
+fun BoxListRow(box: Box, itemCount: Int, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBackground)
+            .clickable { onClick() }
+            .padding(12.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(IconCircleBackground),
+            contentAlignment = Alignment.Center
+        ) { BoxIcon() }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(box.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            if (box.location.isNotBlank()) {
+                Text(box.location, fontSize = 13.sp, fontStyle = FontStyle.Italic, color = TextSecondary)
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(PillBackground)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text(
+                "$itemCount item${if (itemCount != 1) "s" else ""}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = PillText
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("›", fontSize = 20.sp, color = TextSecondary)
+    }
+}
+
+@Composable
+fun SearchResultRow(item: Item, boxName: String, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBackground)
+            .clickable { onClick() }
+            .padding(12.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(IconCircleBackground),
+            contentAlignment = Alignment.Center
+        ) { BoxIcon() }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${item.name} (x${item.quantity})", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("In: $boxName", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun DetailItemRow(item: Item, onClick: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBackground)
+            .clickable { onClick() }
+            .padding(12.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(IconCircleBackground),
+            contentAlignment = Alignment.Center
+        ) { BoxIcon() }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${item.name} (x${item.quantity})", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Qty: ${item.quantity}", fontSize = 12.sp, color = TextSecondary)
+        }
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MoveBackground)
+                .clickable { onMove() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move item", tint = IconTint, modifier = Modifier.size(18.dp))
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(DangerBackground)
+                .clickable { onDelete() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete item", tint = DangerIcon, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
 @Composable
 fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
     val boxes by viewModel.boxes.collectAsState()
@@ -105,66 +308,62 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
-
     val totalItems = itemCounts.values.sum()
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Basement Inventory".uppercase())
-                        Text(
-                            "${boxes.size} boxes · $totalItems items",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AppBarText.copy(alpha = 0.7f)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppBarBackground,
-                    titleContentColor = AppBarText
-                )
-            )
-        },
-        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) }
+        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) },
+        containerColor = PageBackground
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChange(it) },
-                label = { Text("Search items…") },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            ListHeader(boxCount = boxes.size, itemCount = totalItems)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(CardSheetBackground)
+                    .padding(20.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.onSearchQueryChange(it) },
+                    placeholder = { Text("Search items…") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextSecondary)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = SearchBorder,
+                        focusedContainerColor = CardBackground,
+                        unfocusedContainerColor = CardBackground,
+                        cursorColor = Accent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (searchQuery.isNotBlank()) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(searchResults) { item ->
+                            val itemBox = boxes.find { it.id == item.boxId }
+                            SearchResultRow(
+                                item = item,
+                                boxName = itemBox?.name ?: "Unknown box",
+                                onClick = { itemBox?.let { onBoxClick(it) } }
+                            )
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (searchQuery.isNotBlank()) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(searchResults) { item ->
-                        val itemBox = boxes.find { it.id == item.boxId }
-                        ItemRow(
-                            item = item,
-                            subtitle = "In: ${itemBox?.name ?: "Unknown box"}",
-                            onClick = { itemBox?.let { onBoxClick(it) } },
-                            trailing = null
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(boxes) { box ->
-                        BoxTagCard(
-                            box = box,
-                            itemCount = itemCounts[box.id] ?: 0,
-                            onClick = { onBoxClick(box) }
-                        )
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(boxes) { box ->
+                            BoxListRow(box = box, itemCount = itemCounts[box.id] ?: 0, onClick = { onBoxClick(box) })
+                        }
                     }
                 }
             }
@@ -183,49 +382,6 @@ fun BoxListScreen(viewModel: MainViewModel, onBoxClick: (Box) -> Unit) {
 }
 
 @Composable
-fun BoxTagCard(box: Box, itemCount: Int, onClick: () -> Unit) {
-    val shape = remember { PunchedTagShape() }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = shape, clip = false)
-            .clip(shape)
-            .background(TagBackground)
-            .dashedBorder(TagBorder)
-            .clickable { onClick() }
-            .padding(start = 34.dp, top = 14.dp, end = 12.dp, bottom = 14.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(box.name.uppercase(), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    box.location,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                    color = TextSecondary
-                )
-            }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(PageBackground)
-                    .border(1.dp, TagBorder, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Text(itemCount.toString(), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                Text("ITEMS", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-            }
-        }
-    }
-}
-
-@Composable
 fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
     val boxes by viewModel.boxes.collectAsState()
     val currentBox = boxes.find { it.id == box.id } ?: box
@@ -237,50 +393,42 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
     var itemToMove by remember { mutableStateOf<Item?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(currentBox.name.uppercase()) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = AppBarText)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showRenameDialog = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit box", tint = AppBarText)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppBarBackground,
-                    titleContentColor = AppBarText
-                )
-            )
-        },
-        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) }
+        floatingActionButton = { TactileFab(onClick = { showAddDialog = true }) },
+        containerColor = PageBackground
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            Text(
-                currentBox.location,
-                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                color = TextSecondary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                }
+                Text(
+                    currentBox.name,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { showRenameDialog = true }) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit box", tint = TextPrimary)
+                }
+            }
+            if (currentBox.location.isNotBlank()) {
+                Text(
+                    currentBox.location,
+                    fontSize = 13.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(start = 44.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(items) { item ->
-                    ItemRow(
+                    DetailItemRow(
                         item = item,
-                        subtitle = "Qty: ${item.quantity}",
                         onClick = { itemToEdit = item },
-                        trailing = {
-                            Row {
-                                IconButton(onClick = { itemToMove = item }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move item", tint = TextSecondary)
-                                }
-                                IconButton(onClick = { viewModel.deleteItem(item) }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete item", tint = DangerText)
-                                }
-                            }
-                        }
+                        onMove = { itemToMove = item },
+                        onDelete = { viewModel.deleteItem(item) }
                     )
                 }
             }
@@ -329,28 +477,6 @@ fun BoxDetailScreen(viewModel: MainViewModel, box: Box, onBack: () -> Unit) {
                 itemToMove = null
             }
         )
-    }
-}
-
-@Composable
-fun ItemRow(item: Item, subtitle: String, onClick: () -> Unit, trailing: (@Composable () -> Unit)?) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White)
-            .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("${item.name} (x${item.quantity})", style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-        }
-        trailing?.invoke()
     }
 }
 
